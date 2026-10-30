@@ -25,7 +25,11 @@ con cis-eQTL (SNP a < 50 kb).
 | Clustering vs etiquetas externas | ARI = 1.00 | `external_labels.csv` |
 | Firma elastic-net (CV anidada 5×5) | 49 lncRNAs, accuracy 1.00 en todos los folds | las 49 están entre los 300 lncRNAs dirigidos por grupo |
 | cis-eQTL (MatrixEQTL, FDR 0.05) | 63 eGenes | 57 verdaderos (lead SNP correcto en 55), 6 falsos positivos (~10 % FDR empírico) |
-| G × E (DESeq2 LRT) | ver `tables/gxe_summary.tsv` si existe | 80 lncRNAs |
+| G × E (DESeq2 LRT), simulación reducida de 12 accesiones (`*_small`) | 203 features con interacción (padj < 0.05), 77 lncRNAs | 80 lncRNAs con G×E simulada, 67 recuperados |
+| Efecto de condición (DESeq2), simulación reducida | 290 features DE | 10 % de features con efecto simulado |
+
+La simulación completa de 48 accesiones hace el LRT de interacción (48 niveles × condición)
+demasiado lento para este entorno de 4 núcleos; en un servidor normal es cuestión de minutos.
 
 Las figuras están en `figures/` (PCA, PAC por k, matrices de consenso, heatmap de la firma,
 distribución de p y tamaños de efecto de eQTL) y las tablas en `tables/`, incluidos los

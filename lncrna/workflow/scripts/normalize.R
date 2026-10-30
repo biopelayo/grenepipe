@@ -9,7 +9,7 @@ process <- function(counts, tpm, label) {
   expressed <- rowMeans(tpm >= P$expressed_tpm) >= P$expressed_frac
   counts <- counts[expressed, , drop = FALSE]
   dds <- DESeqDataSetFromMatrix(counts, data.frame(row.names = meta$sample, study = factor(meta$study)), ~1)
-  vst_m <- assay(vst(dds, blind = TRUE))
+  vst_m <- if (nrow(dds) >= 1000) assay(vst(dds, blind = TRUE)) else assay(varianceStabilizingTransformation(dds, blind = TRUE))
   # Batch (study) and tissue removed for unsupervised analyses only; models downstream use raw counts + covariates.
   batch <- if (length(unique(meta$study)) > 1) factor(meta$study) else NULL
   tissue <- if (length(unique(meta$tissue)) > 1) factor(meta$tissue) else NULL

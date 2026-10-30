@@ -9,7 +9,7 @@ d <- fread(I$vst); X <- as.matrix(d[, -1]); rownames(X) <- d[[1]]; X <- X[, meta
 ok <- meta$accession_id != ""
 Xa <- sapply(split(which(ok), meta$accession_id[ok]), function(idx) rowMeans(X[, idx, drop = FALSE]))
 
-gt <- fread(I$gt); G <- as.matrix(gt[, -1]); rownames(G) <- gt[[1]]
+gt <- fread(I$gt, header = TRUE); G <- as.matrix(gt[, -1]); rownames(G) <- gt[[1]]
 common <- intersect(colnames(Xa), colnames(G))
 cat(sprintf("accessions with expression and genotypes: %d\n", length(common)))
 if (length(common) < 20) stop("fewer than 20 accessions with both expression and genotypes")

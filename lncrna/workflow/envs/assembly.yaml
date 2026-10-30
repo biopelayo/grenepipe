@@ -1,0 +1,9 @@
+channels: [conda-forge, bioconda]
+dependencies:
+  - python=3.12
+  - pandas=2.2
+  - stringtie=2.2.3
+  - gffcompare=0.12.6
+  - gffread=0.12.7
+  - bedtools=2.31
+  - seqkit=2.8

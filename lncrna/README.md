@@ -1,56 +1,59 @@
 # lncRNA × genoma × expresión en poblaciones de plantas
 
-Proyecto para identificar, cuantificar y usar lncRNAs como marcadores para **estratificar
-accesiones** (o casos/controles) en *Arabidopsis thaliana*, con extensión exploratoria a
-*Chlamydomonas reinhardtii* y *Marchantia polymorpha*. La lógica es la misma que la de las
-firmas de lncRNAs usadas para estratificar pacientes en oncología (consensus clustering sobre
-expresión de lncRNAs, firmas por regresión penalizada, validación en cohortes independientes),
-pero con genotipos de población en lugar de tumores.
+Proyecto completo para identificar lncRNAs a nivel de población, cuantificarlos por accesión y
+usarlos para **estratificar accesiones** (y para análisis caso/control × genotipo) en
+*Arabidopsis thaliana*, con extensión a *Chlamydomonas* y *Marchantia* donde los datos lo
+permitan. La lógica es la de las firmas de lncRNAs que estratifican pacientes en oncología
+(consensus clustering sobre expresión de lncRNAs, firma por regresión penalizada, validación
+en cohorte independiente), aplicada a genotipos naturales con genoma conocido.
 
-Este directorio es independiente de grenepipe (que es un pipeline de variant calling de ADN y
-no sirve para RNA-seq). grenepipe sí puede usarse en la rama de ADN del proyecto.
+Este directorio es independiente del pipeline grenepipe (variant calling de ADN). grenepipe
+sigue siendo útil para la rama de ADN si se resecuencian accesiones nuevas.
 
-## 1. Pregunta y diseño
+## Contenido
 
-**Hipótesis central.** La expresión de lncRNAs varía mucho más entre accesiones que la de genes
-codificantes (Kornienko et al. 2024 muestran que la mayoría de lncRNAs están silenciados y su
-expresión es extremadamente variable, en gran parte por silenciamiento tipo transposón). Esa
-variabilidad contiene estructura (geográfica, climática, de historia demográfica, de estrategia
-de vida) que se puede usar para **estratificar accesiones**, y lncRNAs concretos responden a
-estrés de forma dependiente del genotipo (caso/control × accesión).
+```
+lncrna/
+├── README.md                     este documento
+├── seed_datasets.tsv             datasets clave ya identificados (con accessions verificados)
+├── find_datasets.py              búsqueda sistemática en ENA/SRA, ranking de estudios
+├── make_samplesheet_from_gse.py  GSE -> sample sheet del workflow (vía NCBI + ENA)
+├── config/
+│   ├── config.yaml               parámetros del workflow
+│   └── samples.example.csv       formato de la sample sheet
+└── workflow/                     Snakemake 8: 9 módulos de reglas, 9 envs conda, 12 scripts
+    ├── Snakefile
+    ├── rules/      reference, reads, align, assemble, lncrna, quant, genotypes, analysis
+    ├── envs/       utils, reads, align, assembly, cpc2, feelnc, quant, genotypes, r
+    └── scripts/    Python (anotación) y R (matrices, clustering, firma, G×E, eQTL)
+```
 
-**Tres capas de datos, una por accesión:**
+## 1. Diseño
 
-| Capa | Fuente | Para qué |
+**Hipótesis.** La expresión de lncRNAs varía mucho más entre accesiones que la de genes
+codificantes y está dominada por silenciamiento tipo transposón (Kornienko et al. 2024).
+Esa variación tiene estructura (geografía, clima, grupos genéticos) explotable para
+estratificar accesiones, y parte de ella es cis-genética (eQTL) o metilación-dependiente.
+
+**Tres capas por accesión:**
+
+| Capa | Fuente | Uso |
 |---|---|---|
-| Genoma (SNP/indel/SV) | 1001 Genomes v3.1 VCF, 1135 accesiones | eQTL de lncRNAs, presencia/ausencia de loci, ASE, GWAS de "expresión de lncRNA" como fenotipo |
-| Expresión (RNA-seq stranded) | Kornienko 2024 (499 accesiones, 5 tejidos), 1001 Epigenomes (~1000 transcriptomas) | Anotación de lncRNAs de población, matriz de expresión, clustering |
-| Epigenoma (mC) | 1001 Epigenomes, 444 accesiones solapadas | Explica ~50 % de la variación de lincRNAs; covariable y mecanismo |
+| Genoma | 1001 Genomes v3.1 VCF (1135 accesiones) | cis-eQTL de lncRNAs, presencia/ausencia, ASE |
+| Expresión | Kornienko 2024 (GSE224760, GSE226691; 28 accesiones × 5 tejidos, stranded) + 1001 Epigenomes (GSE80744 / SRP074107, ~1000 transcriptomas) | anotación, matriz, clustering, validación externa |
+| Epigenoma | 1001 Epigenomes (GSE43857) + Kornienko BS-seq (GSE226560) | covariable y mecanismo |
 
-**Dos análisis publicables con los mismos datos:**
+**Dos resultados publicables:**
 
-1. **Estratificación no supervisada.** Consensus clustering (ConsensusClusterPlus / NMF) sobre
-   la matriz de expresión de lncRNAs, estabilidad por remuestreo, comparación con la estructura
-   genética (admixture groups del 1001G), clima de origen (WorldClim en AraClimate) y fenotipos
-   (AraPheno). Pregunta: ¿los lncRNAs separan accesiones mejor o distinto que los genes
-   codificantes, y qué los explica (cis-SNP, metilación, TE)?
-2. **Caso/control × genotipo.** Dataset de estrés en muchas accesiones (sequía leve en ~100
-   accesiones, Clauw et al.; diurno/frío en 20 accesiones GSE71188) para lncRNAs con
-   interacción genotipo × tratamiento, y firma de lncRNAs predictiva de la respuesta.
+1. **Estratificación no supervisada** de accesiones por lncRNAs: consensus clustering con
+   PAC para elegir k, comparación con el clustering por genes codificantes (ARI) y con
+   etiquetas externas (grupos de admixture del 1001G, clima de origen de AraClimate,
+   fenotipos de AraPheno), firma mínima de lncRNAs por elastic-net con CV anidada, validación
+   en la cohorte 1001 Epigenomes.
+2. **Caso/control × genotipo**: en datasets con tratamiento (sequía, frío, diurno) en varias
+   accesiones, lncRNAs con interacción genotipo × tratamiento (DESeq2 LRT) y eQTL.
 
-## 2. Sistema de búsqueda de datos
-
-`find_datasets.py` hace la búsqueda **sistemática y reproducible**, no manual:
-
-1. Descarga todos los runs RNA-seq de ENA para el taxón (ENA Portal API, campo a campo).
-2. Descarga atributos de BioSample (ecotype / strain / accession) para contar genotipos.
-3. Clasifica cada run con heurísticas sobre el texto de metadatos: stranded, rRNA-depleted
-   vs polyA, paired, longitud de lectura, profundidad, términos de estrés/tejido; excluye
-   small RNA, single-cell, degradome, CAGE, Ribo-seq.
-4. Agrupa por estudio y asigna una puntuación que premia stranded + ribo-depleted + paired +
-   ≥75 nt + ≥20 M lecturas + número de accesiones no-referencia + diseño con estrés.
-5. Escribe `studies_ranked.tsv` y una sample sheet lista para nf-core/rnaseq por estudio.
-6. Opcionalmente vuelca los runs WGS (`--with-dna`) para cruzar genotipos RNA/DNA por BioSample.
+## 2. Búsqueda sistemática de datos
 
 ```bash
 pip install pandas requests
@@ -59,63 +62,86 @@ pip install pandas requests
 ./find_datasets.py --organism marchantia  --out results/marchantia --email tu@correo
 ```
 
-Las heurísticas son imperfectas: la mitad de los submitters no describen el protocolo.
-El flujo es: ranking automático → revisión manual del top 30 → confirmación de strandedness
-con los datos reales (nf-core/rnaseq lo infiere con salmon/RSeQC) → tabla final curada.
-`seed_datasets.tsv` contiene los datasets ya identificados en la revisión bibliográfica, con
-columna `status` que indica cuáles tienen el accession verificado y cuáles hay que confirmar
-leyendo el Data Availability del paper.
+Baja todos los runs RNA-seq del taxón en ENA, los atributos de BioSample (ecotype/strain),
+clasifica cada run (stranded, rRNA-depleted vs polyA, paired, longitud, profundidad,
+estrés/tejido; excluye sRNA, single-cell, degradome/CAGE/Ribo-seq), puntúa por estudio
+(premia stranded + ribo-depleted + paired + ≥75 nt + ≥20 M + nº de accesiones no-referencia)
+y escribe `studies_ranked.tsv` más una sample sheet por estudio. El flujo es ranking
+automático → revisión manual del top 30 → confirmación de strandedness con datos reales (el
+workflow la infiere) → tabla curada.
 
-## 3. Criterios de inclusión (fijados antes de mirar resultados)
+Para los datasets ya identificados (ver `seed_datasets.tsv`):
 
-- RNA-seq Illumina, **stranded**, ≥ 75 nt, paired preferido, ≥ 20 M lecturas por muestra.
-- rRNA-depleted / total RNA preferido (captura lncRNAs no poliadenilados y antisense);
-  polyA aceptado como capa secundaria y marcado como covariable.
-- ≥ 20 accesiones no-referencia con genotipo público (1001G o resecuenciado en el mismo
-  estudio) o diseño caso/control con ≥ 3 réplicas biológicas por grupo.
-- Metadatos suficientes para asignar tejido, estadio y condición a cada muestra.
-- Excluidos: mutantes como único contraste, single-cell, small RNA, estudios sin réplicas.
+```bash
+./make_samplesheet_from_gse.py --gse GSE224760 GSE226691 --out config/samples.csv --email tu@correo
+# revisar a mano: accession, accession_id (id numérico 1001G), tissue, condition
+```
 
-## 4. Pipeline de análisis (resumen)
+**Criterios de inclusión fijados a priori**: Illumina stranded, ≥75 nt, ≥20 M lecturas;
+rRNA-depleted preferido (polyA aceptado como covariable); ≥20 accesiones con genotipo público
+o diseño caso/control con ≥3 réplicas; metadatos de tejido/estadio/condición; excluidos
+mutantes como único contraste, single-cell, small RNA, estudios sin réplicas.
 
-1. **Preprocesado y cuantificación**: nf-core/rnaseq (fastp → SortMeRNA para total RNA →
-   STAR 2-pass → salmon), con GTF = Araport11 + anotación de lncRNAs de Kornienko 2024.
-2. **Anotación de lncRNAs de novo por accesión**: StringTie2 guiado por genoma, merge con
-   TACO, filtro de potencial codificante (CPC2 + FEELnc + PLEK, Pfam/hmmscan), longitud ≥ 200,
-   exclusión de solapamiento sense con genes codificantes, clasificación lincRNA / antisense /
-   intrónico, etiquetado de solapamiento con TEs (TAIR10 TE annotation). Mapeo **por accesión
-   contra pseudogenomas** (SNPs del 1001G inyectados con `g2gtools` o `vcf2fasta`) para evitar
-   sesgo de referencia en la cuantificación y en la ASE.
-3. **Matriz y normalización**: counts por locus, TMM/VST, corrección de batch (ComBat-seq o
-   covariables de estudio/tejido), filtrado de lncRNAs expresados en ≥ 10 % de accesiones.
-4. **Estratificación**: ConsensusClusterPlus (PAM/hclust, 1000 remuestreos, k 2–10, PAC para
-   elegir k), NMF como método alternativo, comparación con PCA de SNPs y con los grupos
-   genéticos del 1001G mediante ARI; firma mínima por LASSO/elastic-net multinomial con
-   validación cruzada anidada y validación externa en 1001 Epigenomes.
-5. **Genética**: cis-eQTL (MatrixEQTL / tensorQTL, ±100 kb, PEER factors), GWAS de expresión
-   (GEMMA/LIMIX con kinship del 1001G), ASE en heterocigotos raros, asociación con metilación
-   (mC en el locus) y con solapamiento con TE.
-6. **Caso/control**: DESeq2/limma-voom con modelo `~ accesión + tratamiento + accesión:tratamiento`,
-   o modelos mixtos con kinship; lncRNAs con G×E significativo; co-expresión (WGCNA) para
-   asignar función por "guilt by association".
-7. **Validación y reproducibilidad**: Snakemake/Nextflow para todo, conda/containers
-   fijados, semillas, informe Quarto, datos derivados en Zenodo.
+## 3. Workflow
 
-## 5. Estado por organismo
+```bash
+conda create -n lncrna -c conda-forge -c bioconda snakemake=8 mamba
+conda activate lncrna
+cd lncrna
+snakemake --use-conda --conda-frontend mamba --cores 32 \
+    --directory /ruta/analisis --configfile config/config.yaml
+# Verificar el plan antes: añadir -n
+```
 
-- **Arabidopsis**: viable y de nivel publicable con datos públicos. Dependencia crítica:
-  conseguir los accessions de Kornienko 2024 y de 1001 Epigenomes (bloqueados en esta sesión
-  por red, ver abajo).
-- **Chlamydomonas**: genoma v6 excelente y resecuenciación de decenas de aislados naturales
-  (Flowers 2015, Craig 2019), pero el RNA-seq público es casi todo de cepas de laboratorio.
-  Estratificación de cepas naturales requeriría generar RNA-seq propio; la anotación de
-  lncRNAs condición-dependiente sí es viable.
-- **Marchantia**: anotación de lncRNAs viable (Tak-1), población no viable con datos públicos.
+Pasos (todos con envs conda fijados, descargas automáticas de genoma TAIR10 / Araport11
+de Ensembl Plants, TEs de TAIR, VCF del 1001G, base de SortMeRNA):
 
-## 6. Pendiente
+1. **Lecturas**: descarga desde ENA si son URLs, fastp, SortMeRNA (opcional, para total RNA).
+2. **Strandedness** inferida por muestra con salmon sobre el transcriptoma de referencia
+   (o declarada en la sample sheet).
+3. **STAR 2-pass** con índice de referencia.
+4. **StringTie** por muestra (guiado por Araport11, flag de strand por muestra),
+   `stringtie --merge`, `gffcompare`.
+5. **Candidatos lncRNA**: class codes u/x/i, ≥200 nt, cromosomas nucleares; cuantificación
+   rápida con salmon para soporte de expresión; **CPC2** (y opcionalmente FEELnc y Pfam);
+   solapamiento con TEs (bedtools) → `lncrna/lncrna.gtf` + tabla de clasificación
+   (lincRNA / antisense / intrónico, TE-like, novel). Se pueden fusionar GTFs externos
+   (p. ej. el de Kornienko 2024) vía `reference.extra_lncrna_gtf`.
+6. **Cuantificación final** con salmon (decoys genómicos, GC/seq bias) sobre codificantes +
+   lncRNAs; `tximport` → matrices de counts/TPM separadas (lncRNA, coding, all) + metadatos.
+7. **Normalización**: filtro de expresión, VST, corrección de batch/tejido (limma) solo para
+   análisis no supervisados, PCA.
+8. **Estratificación** (`stratify.R`): media por accesión, top-2000 variables,
+   ConsensusClusterPlus (PAM, Pearson, 1000 remuestreos), PAC, silhouette, k óptimo,
+   mismo procedimiento con genes codificantes, ARI entre ambos y contra etiquetas externas.
+9. **Firma** (`signature.R`): glmnet elastic-net (bi/multinomial) con CV anidada 5×5,
+   accuracy por fold, firma final con coeficientes y tipo de lncRNA, heatmap.
+10. **G × E** (`de_gxe.R`, si hay >1 condición): DESeq2, efecto de condición y LRT de
+    `accession:condition`.
+11. **cis-eQTL** (`eqtl.R`, si ≥20 accesiones con id 1001G): bcftools subset/filtrado
+    (MAF, missingness) → matriz 012; MatrixEQTL ±100 kb con 10 PCs ocultos; eGenes con
+    Bonferroni intra-gen + BH.
+12. **MultiQC** y `results/report.md` con el resumen de todo.
 
-- Ejecutar `find_datasets.py` desde una máquina con acceso a ENA/NCBI (en esta sesión el proxy
-  bloquea ebi.ac.uk y ncbi.nlm.nih.gov).
-- Rellenar `status` de `seed_datasets.tsv` leyendo los Data Availability de Kornienko 2024,
-  Kawakatsu 2016 y Clauw 2016.
-- Decidir tejido principal (rosette/seedling es el que tiene más accesiones).
+Estado de validación: el DAG completo (271 jobs con 30 muestras de prueba, todas las ramas
+activas) se construye correctamente en dry-run con Snakemake 8.15; los scripts Python
+compilan; los scripts R no se han podido ejecutar en este entorno (sin R ni datos). Es
+esperable algún ajuste menor en la primera ejecución real.
+
+## 4. Estado por organismo
+
+- **Arabidopsis**: viable y publicable con datos públicos. Core: Kornienko 2024 (discovery)
+  + 1001 Epigenomes (validación) + 1001 Genomes (genética).
+- **Chlamydomonas**: genoma v6.1 y resecuenciación de aislados naturales existen, pero el
+  RNA-seq público es casi todo de cepas de laboratorio. El workflow sirve tal cual cambiando
+  referencias en `config.yaml` (fasta/GTF de Phytozome; desactivar eQTL/TE); estratificar
+  cepas naturales requeriría generar RNA-seq propio.
+- **Marchantia**: anotación de lncRNAs en Tak-1 viable; población no viable con datos públicos.
+
+## 5. Pendiente (requiere red fuera de este entorno)
+
+- Ejecutar `find_datasets.py` y `make_samplesheet_from_gse.py`.
+- Bajar el GTF de lncRNAs de Kornienko 2024 (suplemento de GSE224760) y ponerlo en
+  `reference.extra_lncrna_gtf`.
+- Confirmar tipo de librería de GSE80744 (polyA vs total) en los registros GSM.
+- Primera ejecución real sobre GSE224760 (28 accesiones, rosette) y ajustar.

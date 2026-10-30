@@ -1,0 +1,3 @@
+channels: [conda-forge, bioconda]
+dependencies:
+  - cpc2=1.0.1

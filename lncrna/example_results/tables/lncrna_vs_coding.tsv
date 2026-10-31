@@ -1,0 +1,4 @@
+comparison	k_lncrna	k_coding	ARI
+lncRNA_vs_coding	3	3	1
+lncRNA_vs_external_label	3		1
+coding_vs_external_label		3	1

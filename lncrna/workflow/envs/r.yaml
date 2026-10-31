@@ -1,0 +1,21 @@
+channels: [conda-forge, bioconda]
+dependencies:
+  - r-base=4.3
+  - r-data.table
+  - r-matrixstats
+  - r-ggplot2
+  - r-pheatmap
+  - r-glmnet
+  - r-cluster
+  - r-mclust
+  - r-matrixeqtl
+  - r-nmf
+  - r-jsonlite
+  - bioconductor-tximport
+  - bioconductor-deseq2
+  - bioconductor-limma
+  - bioconductor-edger
+  - bioconductor-consensusclusterplus
+  - bioconductor-sva
+  - bioconductor-rtracklayer
+  - bioconductor-genomicranges

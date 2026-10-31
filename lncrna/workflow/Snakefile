@@ -1,0 +1,81 @@
+# =================================================================================================
+#     lncRNA population workflow
+# =================================================================================================
+#
+# fastq -> fastp -> (SortMeRNA) -> STAR 2-pass -> StringTie -> merge -> gffcompare -> lncRNA filter
+#       -> salmon (coding + lncRNA) -> matrices -> stratification / signature / G x E / cis-eQTL
+#
+# Run from the lncrna/ directory:
+#   snakemake --use-conda --cores 32 --directory /path/to/analysis --configfile config/config.yaml
+
+import os
+import re
+import pandas as pd
+from snakemake.utils import min_version, validate
+
+min_version("8.0")
+
+
+configfile: "config/config.yaml"
+
+
+SAMPLES = pd.read_csv(config["samples"], dtype=str).fillna("")
+SAMPLES = SAMPLES.set_index("sample", drop=False)
+for col in ["fastq_1", "accession", "tissue", "condition", "study", "strandedness"]:
+    if col not in SAMPLES.columns:
+        raise ValueError(f"samples sheet lacks required column '{col}'")
+if "accession_id" not in SAMPLES.columns:
+    SAMPLES["accession_id"] = ""
+if "fastq_2" not in SAMPLES.columns:
+    SAMPLES["fastq_2"] = ""
+# batch = technical/growth batch used for batch correction; defaults to study
+if "batch" not in SAMPLES.columns:
+    SAMPLES["batch"] = SAMPLES["study"]
+SAMPLES.loc[SAMPLES["batch"] == "", "batch"] = SAMPLES.loc[SAMPLES["batch"] == "", "study"]
+
+SAMPLE_NAMES = SAMPLES["sample"].tolist()
+HAS_CONDITION = SAMPLES["condition"].nunique() > 1
+HAS_GENOTYPES = (SAMPLES["accession_id"] != "").sum() >= 20
+
+REF = "resources/genome.fa"
+GTF = "resources/annotation.gtf"
+TX = "resources/transcripts.fa"
+TE = "resources/te.bed"
+
+
+wildcard_constraints:
+    sample="|".join(map(re.escape, SAMPLE_NAMES)),
+
+
+def is_paired(sample):
+    return bool(SAMPLES.loc[sample, "fastq_2"])
+
+
+include: "rules/reference.smk"
+include: "rules/reads.smk"
+include: "rules/align.smk"
+include: "rules/assemble.smk"
+include: "rules/lncrna.smk"
+include: "rules/quant.smk"
+include: "rules/genotypes.smk"
+include: "rules/analysis.smk"
+
+
+rule all:
+    input:
+        "lncrna/lncrna.gtf",
+        "lncrna/lncrna_classification.tsv",
+        "matrices/counts_lncrna.tsv",
+        "matrices/tpm_lncrna.tsv",
+        "matrices/counts_coding.tsv",
+        "results/stratification/consensus_summary.tsv",
+        "results/stratification/clusters.tsv",
+        "results/signature/signature_lncrnas.tsv",
+        "results/de/gxe_results.tsv" if HAS_CONDITION else [],
+        "results/eqtl/cis_eqtl.tsv" if HAS_GENOTYPES else [],
+        "results/qc/multiqc.html",
+        "results/report.md",
+
+
+localrules:
+    all,

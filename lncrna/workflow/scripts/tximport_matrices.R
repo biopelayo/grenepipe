@@ -25,7 +25,10 @@ write_mat(tpm[is_cod, , drop = FALSE], O$tpm_cod)
 write_mat(counts, O$counts_all)
 write_mat(tpm, O$tpm_all)
 
-meta <- samples[, .(sample, accession, accession_id, tissue, condition, study)]
+if (!"batch" %in% names(samples)) samples[, batch := study]
+samples[batch == "" | is.na(batch), batch := study]
+if (!"accession_id" %in% names(samples)) samples[, accession_id := ""]
+meta <- samples[, .(sample, accession, accession_id, tissue, condition, study, batch)]
 meta[, is_lncrna_feature_count := sum(is_lnc)]
 fwrite(meta, O$metadata, sep = "\t")
 cat(sprintf("genes: %d total, %d lncRNA, %d coding; samples: %d\n", nrow(counts), sum(is_lnc), sum(is_cod), ncol(counts)))

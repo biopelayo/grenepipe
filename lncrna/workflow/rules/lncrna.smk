@@ -18,6 +18,7 @@ rule lncrna_candidates:
         tsv="lncrna/candidates.tsv",
     params:
         min_length=LF["min_length"],
+        min_length_monoexonic=LF.get("min_length_monoexonic", LF["min_length"]),
         class_codes=LF["class_codes"],
         min_exons_intergenic=LF["min_exons_intergenic"],
         chromosomes=config["reference"]["lncrna_chromosomes"],

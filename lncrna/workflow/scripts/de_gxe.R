@@ -8,11 +8,16 @@ d <- fread(I$counts); counts <- as.matrix(d[, -1]); rownames(counts) <- d[[1]]; 
 cls <- fread(I$classification, colClasses = "character")
 lnc_genes <- unique(cls$gene_id)
 
+bcol <- if ("batch" %in% names(meta)) meta$batch else meta$study
 cd <- data.frame(row.names = meta$sample, accession = factor(meta$accession), condition = relevel(factor(meta$condition), "control"),
-                 tissue = factor(meta$tissue), study = factor(meta$study))
+                 tissue = factor(meta$tissue), batch = factor(bcol))
 keep <- rowSums(counts >= 10) >= 3
 counts <- counts[keep, ]
-covars <- c(if (nlevels(cd$tissue) > 1) "tissue", if (nlevels(cd$study) > 1 && !all(table(cd$study, cd$accession) > 0)) NULL)
+# batch enters the model only if it is not confounded with accession (every batch spans >1 accession
+# and every accession spans >1 batch); otherwise accession absorbs it.
+batch_ok <- nlevels(cd$batch) > 1 && all(rowSums(table(cd$batch, cd$accession) > 0) > 1) &&
+  all(colSums(table(cd$batch, cd$accession) > 0) > 1)
+covars <- c(if (nlevels(cd$tissue) > 1) "tissue", if (batch_ok) "batch")
 base <- paste(c(covars, "accession", "condition"), collapse = " + ")
 
 # Condition main effect

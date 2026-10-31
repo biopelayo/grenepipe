@@ -1,0 +1,70 @@
+# =================================================================================================
+#  Dataset: GSE80744 / SRP074107 - 1001 Epigenomes (Kawakatsu et al. 2016, Cell), rosette leaves
+#  Library: TruSeq RNA (polyA, NOT stranded), SE 100 bp; 728 samples in GEO, 727 grown at 22 C,
+#           461 accessions reused by Kornienko 2024 for lncRNA discovery
+#  Role   : VALIDATION cohort for the stratification/signature, and POWER for cis-eQTL (>400 accessions)
+#  Caveats: unstranded -> antisense class unreliable (class_codes u,i only); single-end 100 bp;
+#           batch effects known (original paper used RUVseq); accession id in BioSample "ecotype"/title
+# =================================================================================================
+
+samples: "config/samples.GSE80744.csv"
+
+reference:
+  ensembl_release: 59
+  species: "arabidopsis_thaliana"
+  assembly: "TAIR10"
+  chromosomes: ["1", "2", "3", "4", "5", "Mt", "Pt"]
+  lncrna_chromosomes: ["1", "2", "3", "4", "5"]
+  te_annotation_url: "https://www.arabidopsis.org/download_files/Genes/TAIR10_genome_release/TAIR10_transposable_elements/TAIR10_Transposable_Elements.txt"
+  # Quantify against the discovery annotation (do not re-discover here):
+  # extra_lncrna_gtf: ["/data/runs/GSE224760/lncrna/lncrna.gtf", "/data/runs/GSE226691/lncrna/lncrna.gtf"]
+  extra_lncrna_gtf: []
+
+genotypes:
+  vcf_url: "https://1001genomes.org/data/GMI-MPI/releases/v3.1/1001genomes_snp-short-indel_only_ACGTN.vcf.gz"
+  vcf: "resources/1001genomes_snp-short-indel_only_ACGTN.vcf.gz"
+  maf: 0.05
+  max_missing: 0.1
+
+params:
+  threads: 16
+  fastp: "--cut_right --cut_right_window_size 4 --cut_right_mean_quality 20 --length_required 36"
+  sortmerna: false
+  sortmerna_db_url: "https://github.com/biocore/sortmerna/releases/download/v4.3.4/database.tar.gz"
+  star_sjdb_overhang: 99           # 100 bp reads
+  star_extra: "--alignIntronMax 6000 --alignMatesGapMax 6000 --outFilterIntronMotifs RemoveNoncanonical --outFilterMismatchNoverReadLmax 0.1 --outFilterMismatchNoverLmax 0.3 --outFilterMultimapNmax 10 --alignSJoverhangMin 8 --outSAMstrandField intronMotif"
+  stringtie_assemble: "-c 2 -m 150 -j 2.5 -a 15"
+  stringtie_merge: "-m 200 -c 1 -F 0.5 -T 1"
+  strand_subsample: 500000
+
+lncrna_filter:
+  min_length: 200
+  min_length_monoexonic: 400
+  class_codes: ["u", "i"]          # unstranded: no antisense calls
+  min_exons_intergenic: 2          # unstranded + SE: be stricter with mono-exonic intergenic
+  min_tpm: 0.5
+  min_samples: 5
+  use_feelnc: false
+  use_pfam: false
+  pfam_url: "https://ftp.ebi.ac.uk/pub/databases/Pfam/current_release/Pfam-A.hmm.gz"
+
+analysis:
+  expressed_tpm: 1.0
+  expressed_frac: 0.05             # lncRNAs are mostly silent: 5% of 461 accessions = 23
+  top_variable: 3000
+  consensus:
+    max_k: 12
+    reps: 1000
+    p_item: 0.8
+    cluster_alg: "pam"
+    distance: "pearson"
+    seed: 1234
+  signature:
+    alpha: 0.5
+    outer_folds: 5
+    inner_folds: 5
+  eqtl:
+    cis_window: 100000
+    n_hidden_factors: 15
+    fdr: 0.05
+  external_labels: ""

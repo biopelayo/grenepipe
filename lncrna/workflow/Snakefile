@@ -28,6 +28,10 @@ if "accession_id" not in SAMPLES.columns:
     SAMPLES["accession_id"] = ""
 if "fastq_2" not in SAMPLES.columns:
     SAMPLES["fastq_2"] = ""
+# batch = technical/growth batch used for batch correction; defaults to study
+if "batch" not in SAMPLES.columns:
+    SAMPLES["batch"] = SAMPLES["study"]
+SAMPLES.loc[SAMPLES["batch"] == "", "batch"] = SAMPLES.loc[SAMPLES["batch"] == "", "study"]
 
 SAMPLE_NAMES = SAMPLES["sample"].tolist()
 HAS_CONDITION = SAMPLES["condition"].nunique() > 1

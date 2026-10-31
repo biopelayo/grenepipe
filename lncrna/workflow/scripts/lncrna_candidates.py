@@ -24,6 +24,8 @@ for tid, t in tx.items():
         continue
     if t["length"] < P.min_length:
         continue
+    if len(t["exons"]) == 1 and t["length"] < P.min_length_monoexonic:
+        continue
     if cc == "u" and len(t["exons"]) < P.min_exons_intergenic:
         continue
     keep[tid] = t
@@ -37,4 +39,5 @@ with open(snakemake.output.gtf, "w") as out:
 pd.DataFrame(rows).to_csv(snakemake.output.tsv, sep="\t", index=False)
 write_fasta_from_exons(keep, snakemake.input.fa, snakemake.output.fa)
 print(f"{len(tx)} assembled transcripts, {len(keep)} candidates "
-      f"(class codes {P.class_codes}, length >= {P.min_length})", file=sys.stderr)
+      f"(class codes {P.class_codes}, length >= {P.min_length}, mono-exonic >= {P.min_length_monoexonic})",
+      file=sys.stderr)

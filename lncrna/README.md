@@ -10,6 +10,17 @@ en cohorte independiente), aplicada a genotipos naturales con genoma conocido.
 Este directorio es independiente del pipeline grenepipe (variant calling de ADN). grenepipe
 sigue siendo útil para la rama de ADN si se resecuencian accesiones nuevas.
 
+## Documentación detallada
+
+- `docs/01_estado_del_arte.md`: estado del arte de lncRNAs con DNA-seq y RNA-seq, paso a paso.
+- `docs/02_repositorio_y_viabilidad_local.md`: qué hace cada parte del repo, metadatos reales
+  de los datasets, recursos necesarios, qué ajustar y riesgos conocidos.
+- `docs/03_pipeline_paso_a_paso.md`: cada regla/script con entradas, salidas, parámetros y
+  cómo comprobar que ha ido bien.
+- `config/config.GSE224760.yaml`, `config/config.GSE226691.yaml`, `config/config.GSE80744.yaml`:
+  configuraciones listas para los datasets reales.
+- `run_local.sh`: driver por pasos para la ejecución en local.
+
 ## Contenido
 
 ```

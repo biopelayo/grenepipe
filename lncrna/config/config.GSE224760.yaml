@@ -1,0 +1,73 @@
+# =================================================================================================
+#  Dataset: GSE224760 - Kornienko et al. 2024 (Plant Cell), 14-leaf rosette, 28 accessions
+#  Library: TruSeq Stranded mRNA (polyA, dUTP -> "reverse"), Illumina HiSeq 2500, PE 125 bp
+#  Design : 28 accessions x 2-4 replicates; each replicate is a separate growth batch (weeks apart)
+#  Role   : DISCOVERY cohort (lncRNA annotation + accession stratification)
+#  Source : methods and data availability of doi:10.1093/plcell/koad233; GSM title "acc.<1001G id>.rep<n>"
+# =================================================================================================
+
+samples: "config/samples.GSE224760.csv"
+
+reference:
+  ensembl_release: 59
+  species: "arabidopsis_thaliana"
+  assembly: "TAIR10"
+  chromosomes: ["1", "2", "3", "4", "5", "Mt", "Pt"]
+  lncrna_chromosomes: ["1", "2", "3", "4", "5"]
+  te_annotation_url: "https://www.arabidopsis.org/download_files/Genes/TAIR10_genome_release/TAIR10_transposable_elements/TAIR10_Transposable_Elements.txt"
+  # Published population-level lncRNA annotation (GSE224760 supplementary GTF). Download by hand,
+  # convert chromosome names to Ensembl style (1..5) if they are Chr1..Chr5, then set the path here.
+  # extra_lncrna_gtf: ["/data/refs/Kornienko2024_lncRNA_annotation.ensembl-chr.gtf"]
+  extra_lncrna_gtf: []
+
+genotypes:
+  vcf_url: "https://1001genomes.org/data/GMI-MPI/releases/v3.1/1001genomes_snp-short-indel_only_ACGTN.vcf.gz"
+  vcf: "resources/1001genomes_snp-short-indel_only_ACGTN.vcf.gz"
+  maf: 0.05
+  max_missing: 0.1
+
+params:
+  threads: 16
+  fastp: "--detect_adapter_for_pe --cut_right --cut_right_window_size 4 --cut_right_mean_quality 20 --length_required 36"
+  sortmerna: false                 # polyA library: no rRNA depletion step needed
+  sortmerna_db_url: "https://github.com/biocore/sortmerna/releases/download/v4.3.4/database.tar.gz"
+  star_sjdb_overhang: 124          # 125 bp reads
+  # STAR options used in the paper (plus XS attribute for StringTie)
+  star_extra: "--alignIntronMax 6000 --alignMatesGapMax 6000 --outFilterIntronMotifs RemoveNoncanonical --outFilterMismatchNoverReadLmax 0.1 --outFilterMismatchNoverLmax 0.3 --outFilterMultimapNmax 10 --alignSJoverhangMin 8 --outSAMstrandField intronMotif"
+  # StringTie options used in the paper
+  stringtie_assemble: "-c 2 -m 150 -j 2.5 -a 15"
+  stringtie_merge: "-m 200 -c 1 -F 0.5 -T 1"
+  strand_subsample: 500000
+
+lncrna_filter:
+  min_length: 200
+  min_length_monoexonic: 400       # paper: 200 nt multi-exon, 400 nt single-exon
+  class_codes: ["u", "x", "i"]     # stranded library: antisense (x) is reliable
+  min_exons_intergenic: 1
+  min_tpm: 0.5
+  min_samples: 2
+  use_feelnc: false                # turn on for the final annotation (slow)
+  use_pfam: false
+  pfam_url: "https://ftp.ebi.ac.uk/pub/databases/Pfam/current_release/Pfam-A.hmm.gz"
+
+analysis:
+  expressed_tpm: 1.0
+  expressed_frac: 0.10
+  top_variable: 2000
+  consensus:
+    max_k: 8                       # 28 accessions: do not go beyond k=8
+    reps: 1000
+    p_item: 0.8
+    cluster_alg: "pam"
+    distance: "pearson"
+    seed: 1234
+  signature:
+    alpha: 0.5
+    outer_folds: 4                 # 28 accessions -> 7 per outer fold
+    inner_folds: 5
+  eqtl:
+    cis_window: 100000
+    n_hidden_factors: 5            # 28 accessions: fewer hidden factors
+    fdr: 0.05
+  # CSV accession_id,label with 1001G admixture groups (from the 1001genomes.org accessions table)
+  external_labels: ""

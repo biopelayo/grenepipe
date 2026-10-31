@@ -10,8 +10,10 @@ process <- function(counts, tpm, label) {
   counts <- counts[expressed, , drop = FALSE]
   dds <- DESeqDataSetFromMatrix(counts, data.frame(row.names = meta$sample, study = factor(meta$study)), ~1)
   vst_m <- if (nrow(dds) >= 1000) assay(vst(dds, blind = TRUE)) else assay(varianceStabilizingTransformation(dds, blind = TRUE))
-  # Batch (study) and tissue removed for unsupervised analyses only; models downstream use raw counts + covariates.
-  batch <- if (length(unique(meta$study)) > 1) factor(meta$study) else NULL
+  # Batch and tissue removed for unsupervised analyses only; models downstream use raw counts + covariates.
+  # `batch` column (growth/sequencing batch) if present, else study.
+  bcol <- if ("batch" %in% names(meta)) meta$batch else meta$study
+  batch <- if (length(unique(bcol)) > 1) factor(bcol) else NULL
   tissue <- if (length(unique(meta$tissue)) > 1) factor(meta$tissue) else NULL
   bc <- vst_m
   if (!is.null(batch) || !is.null(tissue)) {

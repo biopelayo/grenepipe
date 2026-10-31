@@ -10,7 +10,8 @@
 #   accession_id  1001 Genomes numeric id (e.g. 6909) or empty; needed for eQTL
 #   tissue        tissue / developmental stage
 #   condition     "control", "drought", ... (used by the G x E analysis if >1 level)
-#   study         batch / source study (GSE id); used as batch covariate
+#   study         source study (GSE id)
+#   batch         optional growth/sequencing batch (e.g. rep1..rep4 in GSE224760); defaults to study
 #   strandedness  "auto", "reverse", "forward", "unstranded"
 # Build it with find_datasets.py (sample sheets per study) and/or make_samplesheet_from_gse.py.
 samples: "config/samples.csv"
@@ -47,14 +48,18 @@ params:
   sortmerna: true
   sortmerna_db_url: "https://github.com/biocore/sortmerna/releases/download/v4.3.4/database.tar.gz"
   star_sjdb_overhang: 99          # read length - 1
-  star_extra: "--outFilterMultimapNmax 20 --alignSJoverhangMin 8 --alignSJDBoverhangMin 1 --outFilterMismatchNoverReadLmax 0.04 --alignIntronMin 20 --alignIntronMax 6000 --alignMatesGapMax 6000 --outSAMstrandField intronMotif"
-  stringtie_assemble: "-m 200 -c 2 -f 0.05 -j 2"
+  # STAR options as in Kornienko et al. 2024 (short Arabidopsis introns), plus XS for StringTie
+  star_extra: "--alignIntronMax 6000 --alignMatesGapMax 6000 --outFilterIntronMotifs RemoveNoncanonical --outFilterMismatchNoverReadLmax 0.1 --outFilterMismatchNoverLmax 0.3 --outFilterMultimapNmax 10 --alignSJoverhangMin 8 --outSAMstrandField intronMotif"
+  # StringTie options as in Kornienko et al. 2024
+  stringtie_assemble: "-c 2 -m 150 -j 2.5 -a 15"
   stringtie_merge: "-m 200 -c 1 -F 0.5 -T 1"
   # Subsample size (read pairs) for strandedness inference with salmon
   strand_subsample: 500000
 
 lncrna_filter:
   min_length: 200
+  # single-exon transcripts need to be longer (Kornienko et al. 2024 used 400 nt)
+  min_length_monoexonic: 400
   # gffcompare class codes kept as lncRNA candidates:
   #   u = intergenic, x = antisense exonic overlap, i = fully intronic, o = other-strand overlap excluded
   class_codes: ["u", "x", "i"]

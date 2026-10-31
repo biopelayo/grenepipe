@@ -1,0 +1,132 @@
+# =================================================================================================
+#  Comparative logic, machine-readable. See docs/04_logica_comparativa.md for the rationale.
+#  Grounded in Kornienko et al. 2024 (doi:10.1093/plcell/koad233) and Kawakatsu et al. 2016
+#  (doi:10.1016/j.cell.2016.06.044). Used by downstream scripts as they are implemented.
+# =================================================================================================
+
+expression_state:
+  on_tpm: 0.5                  # "expressed" as in Kornienko 2024
+  sensitivity_tpm: [0.25, 1.0]
+  informative_locus:           # for per-locus genetic/epigenetic models
+    min_frac_on: 0.05
+    min_frac_off: 0.05
+
+locus_strata:
+  type: [lincRNA, antisense, intronic, coding, te_gene]
+  lincrna_subtype:
+    te_like:  {rule: "te_overlap_frac >= 0.5 or te_piece_blast == true"}
+    pc_like:  {rule: "te_overlap_frac < 0.5 and te_piece_blast == false"}
+  copy_number:
+    single: {rule: "copies <= 1"}
+    multi:  {rule: "copies > 1"}
+    high:   {rule: "copies > 10"}
+  on_frequency:
+    private:      {max_frac: 0.0001}
+    rare:         {max_frac: 0.05}
+    intermediate: {max_frac: 0.50}
+    common:       {min_frac: 0.50}
+  pericentromeric: {max_distance_bp: 2000000}
+
+accession_strata:
+  metadata_file: "config/accession_metadata.csv"
+  required_columns: [accession_id]
+  optional_columns:
+    - admixture_group         # 1001genomes.org accessions table
+    - relict                  # TRUE/FALSE
+    - latitude
+    - longitude
+    - bio1_annual_mean_temp   # WorldClim / AraClimate
+    - bio12_annual_precip
+    - bio4_temp_seasonality
+    - flowering_time_10C      # AraPheno
+    - flowering_time_16C
+    - global_mCHH             # 1001 Epigenomes
+  derived:
+    silencing_efficiency:
+      definition: "number of TE-like lincRNA loci ON + number of TE genes ON in rosette, residualised on log(reads) and %unique"
+      cohort: GSE80744
+
+cohorts:
+  discovery:   {gse: GSE224760, tissue: rosette14, stranded: true,  batch: growth_batch, use: [annotation, variance, clustering, signature_train, as_pc_pairs]}
+  tissues:     {gse: GSE226691, tissue: [seedling, rosette9, flower, pollen], stranded: true, use: [annotation, tissue_x_accession, clustering_per_tissue]}
+  validation:  {gse: GSE80744,  tissue: rosette, stranded: false, classes_allowed: [lincRNA, intronic], use: [signature_test, clustering_denovo, eqtl, gwas, silencing_efficiency]}
+  methylomes:  {gse: GSE43857,  overlap_with_validation: 444, use: [epigenetic_models]}
+  genotypes:   {source: "1001genomes v3.1 VCF", use: [eqtl, gwas, pav_flag, kinship]}
+
+blocks:
+  B1_annotation_recovery:
+    compare: [our_lncrna_gtf, kornienko_2024_gtf]
+    tool: gffcompare
+    decision: {continue_if_locus_sensitivity_ge: 0.85, revisit_if_lt: 0.70}
+
+  B2_variance_structure:
+    contrasts:
+      - {name: inter_vs_intra_accession, unit: locus, metric: ICC, model: "~ 1 + (1|accession) + (1|batch)", by: [type, lincrna_subtype], cohort: discovery, filter: "on_in >= 2 accessions"}
+      - {name: te_like_vs_pc_like, metric: [frac_on, CV, ICC], test: mann_whitney, stratify_by: pericentromeric}
+      - {name: accession_vs_tissue, cohort: tissues, subset: "accessions with 4 tissues", model: "~ accession + tissue", metric: variance_explained, by: type}
+    expected: "ICC(lincRNA) > ICC(coding) > ICC(antisense); accession > tissue for TE-like lincRNA"
+
+  B3_stratification:
+    matrices:
+      - {id: coding_vst,   features: coding,   transform: vst_batchcorrected, distance: pearson}
+      - {id: lincrna_vst,  features: lincRNA,  transform: vst_batchcorrected, distance: pearson}
+      - {id: lincrna_bin,  features: lincRNA,  transform: on_off,             distance: jaccard}
+      - {id: telike_bin,   features: "lincRNA & te_like", transform: on_off, distance: jaccard}
+      - {id: pclike_bin,   features: "lincRNA & pc_like", transform: on_off, distance: jaccard}
+    method: {consensus: {alg: pam, reps: 1000, p_item: 0.8, max_k: 8}, select_k: PAC, robustness: jackknife_accessions_10pct}
+    comparisons:
+      - {a: lincrna_bin, b: coding_vst, metric: ARI}
+      - {a: lincrna_bin, b: admixture_group, metric: ARI, test: permutation_1000}
+      - {a: lincrna_bin, b: [bio1_annual_mean_temp, bio12_annual_precip, bio4_temp_seasonality], test: kruskal, adjusted_model: "cluster ~ bioclim + genetic_PC1..10"}
+      - {a: lincrna_bin, b: silencing_efficiency, test: kruskal, if_significant: "re-cluster on residuals"}
+      - {a: lincrna_bin, b: global_mCHH, test: kruskal}
+    signature:
+      train: discovery
+      test: validation
+      model: {family: multinomial, penalty: elastic_net, alpha: 0.5, cv: nested_5x5}
+      metrics: [accuracy, kappa, ARI_predicted_vs_denovo]
+      pass_if: {accuracy_ge: 0.8, ARI_ge: 0.5}
+
+  B4_genetic_vs_epigenetic:
+    cohort: validation
+    loci: "lincRNA & informative_locus"
+    models:
+      - {id: M1_cis, predictors: ["cis SNPs +-100kb, MAF>=0.05"], method: MatrixEQTL, hidden_factors: 15, fdr: 0.05}
+      - {id: M2_epi, predictors: [mCG_body, mCHH_body, mCG_promoter, mCHH_promoter], method: linear}
+      - {id: M3_joint, predictors: [lead_snp, mCG_body, mCHH_body, genetic_PC1..10, silencing_efficiency], method: variance_partition}
+      - {id: M4_mediation, path: "lead_snp -> mCHH_body -> expression", method: mediation_bootstrap_1000}
+      - {id: M5_onoff, response: on_off, predictors: [lead_snp], method: logistic_with_kinship}
+    aggregate_by: [lincrna_subtype, copy_number, on_frequency]
+    reference: coding_genes
+    pav_flag: {source: "1001G DNA read depth over locus", rule: "normalised depth < 0.2 -> absent"}
+
+  B5_silencing_efficiency_trait:
+    phenotype: silencing_efficiency
+    analyses: [snp_heritability, gwas_with_kinship, association_with_bioclim, relict_vs_nonrelict, correlation_with_global_mCHH]
+
+  B6_antisense_cis_pairs:
+    cohorts: [discovery, tissues]
+    pairs: "antisense lncRNA with overlapping protein-coding gene, both ON in >= 10% accessions"
+    metrics: [spearman_rho_across_accessions]
+    null: random_pairs_1000
+    report: {rho_le: -0.5}
+    colocalisation: {rule: "lead eQTL of AS and of PC in LD r2 > 0.8"}
+
+  B7_tissue_by_accession:
+    cohort: tissues
+    subset: "23 accessions with 4 tissues"
+    model: "log_tpm ~ accession + tissue + accession:tissue"
+    outputs: [frac_interaction_by_type, pollen_flower_specific_sets, jaccard_between_accessions_per_tissue, ARI_between_per_tissue_clusterings]
+
+  B8_prioritisation:
+    overlaps: [kornienko_157_gwas_lincrnas, aragwas_catalog_hits_pm5kb, brassicaceae_synteny, wgcna_modules_461acc, k9_k27_class]
+
+confounders:
+  - {name: growth_batch, where: discovery, control: "batch column; mixed model; limma only for unsupervised"}
+  - {name: depth_and_mapping, where: on_counts, control: "residualise on log(reads), %unique"}
+  - {name: unstranded_library, where: validation, control: "exclude antisense"}
+  - {name: reference_bias, where: [distant_accessions, relicts], control: "PAV flag; sensitivity excluding relicts"}
+  - {name: population_structure, where: [eqtl, gwas, cluster_vs_climate], control: "kinship / genetic PCs; stratified permutations"}
+  - {name: centromere_distance, where: te_like_vs_pc_like, control: "stratify <=2Mb / >2Mb"}
+  - {name: multimapping, where: multicopy_loci, control: "report with and without multicopy"}
+  - {name: on_off_threshold, where: all_binary, control: "sensitivity 0.25 / 1.0 TPM"}

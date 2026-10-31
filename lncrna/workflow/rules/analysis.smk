@@ -34,6 +34,7 @@ rule stratify:
     input:
         vst_lnc="results/normalized/vst_lncrna_batchcorrected.tsv",
         vst_cod="results/normalized/vst_coding_batchcorrected.tsv",
+        tpm_lnc="matrices/tpm_lncrna.tsv",
         metadata="matrices/metadata.tsv",
         labels=A["external_labels"] if A["external_labels"] else [],
     output:
@@ -44,6 +45,7 @@ rule stratify:
     params:
         top_variable=A["top_variable"],
         consensus=A["consensus"],
+        on_tpm=A.get("on_tpm", 0.5),
     log:
         "logs/analysis/stratify.log",
     threads: 8

@@ -51,6 +51,8 @@ lncrna_filter:
 analysis:
   expressed_tpm: 1.0
   expressed_frac: 0.05             # lncRNAs are mostly silent: 5% of 461 accessions = 23
+  # ON/OFF threshold for the binary (Jaccard) stratification layer (Kornienko 2024: TPM > 0.5)
+  on_tpm: 0.5
   top_variable: 3000
   consensus:
     max_k: 12

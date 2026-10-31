@@ -79,6 +79,8 @@ analysis:
   expressed_tpm: 1.0
   expressed_frac: 0.10
   # Number of most variable features for clustering
+  # ON/OFF threshold for the binary (Jaccard) stratification layer (Kornienko 2024: TPM > 0.5)
+  on_tpm: 0.5
   top_variable: 2000
   # Consensus clustering
   consensus:

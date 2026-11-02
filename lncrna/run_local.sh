@@ -22,7 +22,9 @@ EMAIL="${EMAIL:-you@example.org}"
 CORES="${CORES:-16}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 CFG="$HERE/config/config.$GSE.yaml"
-SNK="snakemake --snakefile $HERE/workflow/Snakefile --use-conda --conda-frontend mamba --cores $CORES --rerun-incomplete --keep-going --printshellcmds"
+CONDA_PREFIX_DIR="${CONDA_ENVS:-$(dirname "$RUN")/../conda-envs}"
+mkdir -p "$CONDA_PREFIX_DIR"
+SNK="snakemake --snakefile $HERE/workflow/Snakefile --use-conda --conda-frontend mamba --conda-prefix $CONDA_PREFIX_DIR --cores $CORES --rerun-incomplete --keep-going --printshellcmds"
 
 mkdir -p "$RUN/config"
 

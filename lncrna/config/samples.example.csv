@@ -1,0 +1,3 @@
+sample,fastq_1,fastq_2,accession,accession_id,tissue,condition,study,strandedness
+Col0_rosette_r1,ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR000/000/SRR0000000_1.fastq.gz,ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR000/000/SRR0000000_2.fastq.gz,Col-0,6909,rosette14,control,GSE224760,auto
+Acc9100_rosette_r1,ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR000/001/SRR0000001_1.fastq.gz,ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR000/001/SRR0000001_2.fastq.gz,Kn-0,9100,rosette14,control,GSE224760,auto

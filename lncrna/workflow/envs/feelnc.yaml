@@ -1,0 +1,3 @@
+channels: [conda-forge, bioconda]
+dependencies:
+  - feelnc=0.2
